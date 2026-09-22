@@ -280,11 +280,40 @@ function sg_action_send_test_mail(array $post, array $settings): never
     sg_json_out($res + ['transport' => $s['mail']['transport'], 'to' => $s['notifyEmail']]);
 }
 
+/**
+ * Send a Telegram test message using the form's current values, even before Telegram is enabled.
+ *
+ * @param array<string,mixed> $settings
+ */
+function sg_action_send_test_telegram(array $post, array $settings): never
+{
+    // Validate as if disabled, so an unchecked box is no obstacle; then force-enable for this one send.
+    $r = sg_settings_from_post(['telegramEnabled' => ''] + $post, $settings);
+    if ($r['errors'] !== []) {
+        sg_json_out(['ok' => false, 'error' => implode(' ', $r['errors'])]);
+    }
+    $s = $r['settings'];
+    $s['telegram']['enabled'] = true;
+    $when = sg_format_dt(sg_now());
+    sg_json_out(sg_tg_send('✅ <b>Sensor Grid</b> test message, sent ' . sg_e($when) . '. If you can read this, Telegram notifications work.', $s));
+}
+
+/**
+ * Look up the chat id of whoever last messaged the bot (token from the form, else the stored one).
+ *
+ * @param array<string,mixed> $settings
+ */
+function sg_action_detect_telegram_chat(array $post, array $settings): never
+{
+    $token = trim((string)($post['telegramToken'] ?? '')) ?: (string)$settings['telegram']['botToken'];
+    sg_json_out(sg_tg_detect_chat($token, $settings));
+}
+
 // ---------- HANDLE POST ----------
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
-    $isAjax = in_array($action, ['test', 'sendTestMail'], true);
+    $isAjax = in_array($action, ['test', 'sendTestMail', 'sendTestTelegram', 'detectTelegramChat'], true);
 
     if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) {
         if ($isAjax) {
@@ -306,6 +335,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'test':         sg_action_test($_POST, $settings); break;
             case 'saveSettings': sg_action_save_settings($_POST, $settings); break;
             case 'sendTestMail': sg_action_send_test_mail($_POST, $settings); break;
+            case 'sendTestTelegram':   sg_action_send_test_telegram($_POST, $settings); break;
+            case 'detectTelegramChat': sg_action_detect_telegram_chat($_POST, $settings); break;
             default:
                 http_response_code(400);
                 exit("Unknown action\n");
@@ -354,6 +385,7 @@ foreach ($pages as $p) {
 $cronAge     = $settings['lastCronRun'] === null ? null : $now - (int)strtotime((string)$settings['lastCronRun']);
 $cronOffline = $cronAge === null || $cronAge > 300;
 $mailCfg     = $settings['mail'];
+$tgCfg       = $settings['telegram'];
 $appBase     = rtrim((string)$settings['appUrl'], '/');
 $dataDir     = str_replace('\\', '/', SG_DATA_DIR);
 $cronCli     = '* * * * * /usr/bin/php ' . str_replace('\\', '/', SG_ROOT) . '/cron.php >> ' . $dataDir . '/cron.log 2>&1';
@@ -607,13 +639,32 @@ function sg_history_block(array $lines, int $total, string $class, string $prefi
                             </div>
                         </fieldset>
 
+                        <fieldset class="smtp-fields">
+                            <legend>Telegram</legend>
+                            <div class="field-grid">
+                                <div class="field field--check field--wide"><label><input type="checkbox" id="s-tg-enabled" name="telegramEnabled" value="1"<?= $tgCfg['enabled'] ? ' checked' : '' ?>> Also send notifications to Telegram</label></div>
+                            </div>
+                            <div id="tg-fields"<?= $tgCfg['enabled'] ? '' : ' hidden' ?>>
+                                <div class="field-grid">
+                                    <div class="field"><label for="s-tg-token">Bot token</label><input type="password" id="s-tg-token" name="telegramToken" autocomplete="new-password" placeholder="<?= $tgCfg['botToken'] !== '' ? 'unchanged' : '123456789:AA…' ?>" value=""></div>
+                                    <div class="field"><label for="s-tg-chat">Chat ID</label><input type="text" id="s-tg-chat" name="telegramChatId" inputmode="numeric" pattern="-?[0-9]{1,20}" value="<?= sg_e($tgCfg['chatId']) ?>"></div>
+                                </div>
+                                <p class="dim">Create a bot with @BotFather, press Start in its chat, then Detect chat ID. Tip: in @BotFather, <code>/setjoingroups</code> → Disable. The bot never answers anyone; it only sends to this chat ID.</p>
+                                <div class="form-actions">
+                                    <button type="button" id="tg-detect" class="lcars-btn lcars-btn--sm lcars-btn--lilac">Detect chat ID</button>
+                                    <button type="button" id="tg-test" class="lcars-btn lcars-btn--sm lcars-btn--blue">Send test message</button>
+                                </div>
+                                <div id="tg-result" class="test-result" aria-live="polite" hidden></div>
+                            </div>
+                        </fieldset>
+
                         <h3 class="group-title">Fetching &amp; failures</h3>
                         <div class="field-grid">
                             <div class="field field--wide"><label for="s-ua">User agent</label><input type="text" id="s-ua" name="userAgent" maxlength="200" value="<?= sg_e($settings['userAgent']) ?>"></div>
                             <div class="field"><label for="s-rt">Request timeout (s)</label><input type="number" id="s-rt" name="requestTimeout" min="1" max="120" value="<?= (int)$settings['requestTimeout'] ?>"></div>
                             <div class="field"><label for="s-ct">Connect timeout (s)</label><input type="number" id="s-ct" name="connectTimeout" min="1" max="60" value="<?= (int)$settings['connectTimeout'] ?>"></div>
                             <div class="field"><label for="s-ft">Failure threshold</label><input type="number" id="s-ft" name="failureThreshold" min="1" max="100" value="<?= (int)$settings['failureThreshold'] ?>"></div>
-                            <div class="field field--check"><label><input type="checkbox" name="notifyOnFailure" value="1"<?= $settings['notifyOnFailure'] ? ' checked' : '' ?>> Email when a monitor keeps failing</label></div>
+                            <div class="field field--check"><label><input type="checkbox" name="notifyOnFailure" value="1"<?= $settings['notifyOnFailure'] ? ' checked' : '' ?>> Notify when a monitor keeps failing</label></div>
                         </div>
 
                         <h3 class="group-title">Cron</h3>

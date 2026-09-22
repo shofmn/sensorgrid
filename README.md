@@ -6,10 +6,11 @@ A self-hosted website change monitor: Watch pages (or one element of it) for cha
 
 - Monitor any http(s) URL, the whole `<body>`, a single element by `#id`, or every element with a `.class`, in intervals from 1 minute to 24 hours.
 - Emails the exact change, one email per changed site.
+- Optional Telegram messages from your own bot, sent only to you (see [Telegram](#telegram)).
 - Per-site change history (last 20 entries) in an expandable row.
 - Three mail transport options: `smtp` (vendored PHPMailer), `mail` (PHP `mail()`), `log` (a file, for development).
 - Build-in resilience:
-  - one email when a site fails N checks in a row, re-armed after the next success.
+  - one email (and Telegram message) when a site fails N checks in a row, re-armed after the next success.
   - a cron-monitor in the UI warns if the cronjob hasn't been running as scheduled.
 - No database required: Flat files only (`data/`); backup is a folder copy.
 - Simple setup: just push the files to your web root instead of executing any build processes.
@@ -90,17 +91,31 @@ All keys of `data/settings.txt` (JSON). Everything except the read-only ones is 
 | `mail.smtpAuth`    | `true`                   | Authenticate with user/password.                                                               |
 | `mail.smtpUser`    | `""`                     | SMTP username.                                                                                 |
 | `mail.smtpPass`    | `""`                     | SMTP password. Never sent back to the browser; leaving the field empty keeps the stored value. |
+| `telegram.enabled` | `false`                  | Also send change and failure notifications to Telegram.                                        |
+| `telegram.botToken` | `""`                     | Bot token from @BotFather. Never sent back to the browser; an empty field keeps the stored value. |
+| `telegram.chatId`  | `""`                     | Your Telegram chat id, the only recipient.                                                     |
 | `cronToken`        | generated                | Token for HTTP cron. Read-only in the UI.                                                      |
 | `userAgent`        | `SensorGrid/1.0 (…)`     | User-Agent header for fetches.                                                                 |
 | `requestTimeout`   | `20`                     | Whole-request timeout, seconds.                                                                |
 | `connectTimeout`   | `10`                     | Connection timeout, seconds.                                                                   |
 | `maxRedirects`     | `5`                      | Redirects followed per fetch (file only).                                                      |
 | `maxContentBytes`  | `2000000`                | Larger responses fail with `CONTENT_TOO_LARGE` (file only).                                    |
-| `notifyOnFailure`  | `true`                   | Send a failure email when the threshold is crossed.                                            |
+| `notifyOnFailure`  | `true`                   | Send a failure email (and Telegram message) when the threshold is crossed.                     |
 | `failureThreshold` | `3`                      | Consecutive failures before that email.                                                        |
 | `lastCronRun`      | `null`                   | Written by `cron.php`; drives the CRON OFFLINE warning.                                        |
 | `lastCronDuration` | `null`                   | Seconds the last cron run took.                                                                |
 
+
+## Telegram
+
+Optionally, every change and failure alert is also sent as a Telegram message from your own bot:
+
+1. In Telegram, talk to **@BotFather**, send `/newbot` and copy the **bot token** (`123456789:AA…`). Treat it like a password.
+2. Recommended: in @BotFather, `/setjoingroups` → your bot → **Disable**, so nobody can add it to a group.
+3. Open your new bot and press **Start** (a bot can only message people who wrote to it first).
+4. In **Settings → Telegram**, tick *Also send notifications to Telegram*, paste the token, click **Detect chat ID** and check that the name shown is yours. Then **Send test message** and **Save settings**.
+
+**Only you receive anything.** Sensor Grid only *sends*: every message goes to the one chat id in Settings. It never registers a webhook and never reads or answers incoming messages, so anyone else who writes to the bot gets no reply at all. The only read is **Detect chat ID**, which runs when you click it and just shows who last messaged the bot. Send and failure results are logged as `telegram sent|FAILED (…)` in `data/cron.log`; the token is never logged.
 
 ## Data files
 
@@ -153,7 +168,7 @@ Developed on Windows with Laragon.
 - Access control is Apache Basic Auth and nothing else; there are no accounts. Keep `.htpasswd` outside the web root.
 - Monitored URLs are fetched **server-side**, so anyone who can add a monitor can make your server request any address it can reach (SSRF). Do not expose this tool to untrusted users, and preferably keep it off the public internet.
 - Every state-changing request carries a CSRF token; all output is HTML-escaped; a Content-Security-Policy restricts the page to its own origin.
-- `data/settings.txt` holds the SMTP password in plain text. `data/` is denied by Apache, but moving it outside the web root (`SG_DATA_DIR`) is better.
+- `data/settings.txt` holds the SMTP password and the Telegram bot token in plain text. `data/` is denied by Apache, but moving it outside the web root (`SG_DATA_DIR`) is better.
 - `.git/`, dotfiles and directory listings are blocked in `.htaccess`. Copy `.htaccess.example` and set `AuthUserFile` to the absolute path of your password file.
 
 

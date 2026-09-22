@@ -13,6 +13,8 @@ declare(strict_types=1);
 define('SG_DATA_DIR', __DIR__ . '/data');
 define('SG_ROOT', __DIR__);
 
+require_once __DIR__ . '/telegram.php';
+
 const SG_JSON_FLAGS       = JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
 const SG_HISTORY_MAX      = 20;   // entries kept per monitor
 const SG_LINE_MAX_CHARS   = 500;  // per stored / emailed diff line
@@ -49,7 +51,12 @@ function sg_defaults(): array
             'smtpUser'   => '',
             'smtpPass'   => '',
         ],
-        'cronToken'        => '',
+        'telegram'         => [
+            'enabled'  => false,
+            'botToken' => '',
+            'chatId'   => '',
+        ],
+        'cronToken'      => '',
         'userAgent'        => 'SensorGrid/1.0 (personal website monitor)',
         'requestTimeout'   => 20,
         'connectTimeout'   => 10,
@@ -312,7 +319,7 @@ function sg_settings_update(callable $mutator): array
 
 /**
  * Validate the settings form. Returns the new settings (not persisted) plus errors.
- * An empty SMTP password keeps the stored one; cron token and cron stats are never form-editable.
+ * An empty SMTP password or Telegram token keeps the stored one; cron token and cron stats are never form-editable.
  *
  * @param array<string,mixed> $post
  * @param array<string,mixed> $current
@@ -380,6 +387,23 @@ function sg_settings_from_post(array $post, array $current): array
     $pass = (string)($post['smtpPass'] ?? '');
     if ($pass !== '') {
         $s['mail']['smtpPass'] = $pass;
+    }
+
+    // Like the SMTP password, an empty token field keeps the stored token.
+    $token = $str('telegramToken');
+    if ($token !== '' && !preg_match('/^\d+:[A-Za-z0-9_-]{30,}$/', $token)) {
+        $errors[] = 'Telegram bot token looks wrong; it should look like 123456789:AA… (from @BotFather).';
+    } elseif ($token !== '') {
+        $s['telegram']['botToken'] = $token;
+    }
+    $chatId = $str('telegramChatId');
+    if ($chatId !== '' && !preg_match('/^-?\d{1,20}$/', $chatId)) {
+        $errors[] = 'Telegram chat id must be a number.';
+    }
+    $s['telegram']['chatId']  = $chatId;
+    $s['telegram']['enabled'] = !empty($post['telegramEnabled']);
+    if ($s['telegram']['enabled'] && ($s['telegram']['botToken'] === '' || $chatId === '')) {
+        $errors[] = 'Telegram needs a bot token and a chat id before it can be enabled.';
     }
     return ['errors' => $errors, 'settings' => $s];
 }
@@ -940,6 +964,7 @@ function sg_check_site(array $site, array $settings, bool $dryRun = false): arra
         'removedCount' => $diff['removed'],
     ]);
     $mail = sg_send_change_email($site, $diff, $settings, $at);
+    sg_tg_change($site, $diff, $settings);
     sg_text_write($snapPath, $text);
 
     $site['lastChange'] = $at;
@@ -985,6 +1010,7 @@ function sg_record_failure(array $site, array $settings, string $error): array
         && empty($site['failureNotified'])
     ) {
         sg_send_failure_email($site, $settings, $error);
+        sg_tg_failure($site, $settings, $error);
         $site['failureNotified'] = true;
     }
     return $site;

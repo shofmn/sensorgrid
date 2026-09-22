@@ -129,6 +129,36 @@
     }
   });
 
+  /* ---------- Telegram: detect chat id, send test message ---------- */
+
+  const tgResult = $('#tg-result');
+
+  /** Post the settings form under `action`, then report through onResult(r) → {ok, title}. */
+  function tgButton(btn, action, busy, onResult) {
+    btn.addEventListener('click', async () => {
+      const fields = Object.fromEntries(new FormData($('#settings-form')));
+      fields.action = action;
+      btn.disabled = true;
+      showResult(tgResult, { ok: true, title: busy });
+      try {
+        showResult(tgResult, onResult(await post(fields)));
+      } catch (e) {
+        showResult(tgResult, { ok: false, title: `Failed — ${e.message}` });
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  tgButton($('#tg-detect'), 'detectTelegramChat', 'Asking Telegram…', (r) => {
+    if (!r.ok) return { ok: false, title: r.error };
+    $('#s-tg-chat').value = r.chatId;
+    return { ok: true, title: `Found ${r.name || 'a chat'} — ${r.chatId}. Is that you? Then save settings.` };
+  });
+
+  tgButton($('#tg-test'), 'sendTestTelegram', 'Sending…', (r) =>
+    ({ ok: r.ok, title: r.ok ? 'Test message sent — check Telegram' : `Sending failed — ${r.error}` }));
+
   /* ---------- Add / edit form ---------- */
 
   const submitBtn = $('#f-submit');
@@ -167,7 +197,7 @@
   $$('[data-minutes]').forEach((btn) =>
     btn.addEventListener('click', () => { form.elements.intervalMinutes.value = btn.dataset.minutes; }));
 
-  /* ---------- Disclosure: history drawers, settings panel, SMTP fields ---------- */
+  /* ---------- Disclosure: history drawers, settings panel, SMTP and Telegram fields ---------- */
 
   function toggleDisclosure(btn, panel) {
     const open = panel.hidden;
@@ -182,6 +212,9 @@
 
   const transport = $('#transport');
   transport.addEventListener('change', () => { $('#smtp-fields').hidden = transport.value !== 'smtp'; });
+
+  const tgEnabled = $('#s-tg-enabled');
+  tgEnabled.addEventListener('change', () => { $('#tg-fields').hidden = !tgEnabled.checked; });
 
   /* ---------- Destructive actions ---------- */
 
