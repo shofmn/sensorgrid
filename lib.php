@@ -50,7 +50,7 @@ function sg_defaults(): array
             'smtpPass'   => '',
         ],
         'cronToken'        => '',
-        'userAgent'        => 'SensorGrid/1.0 (+https://github.com/ website monitor)',
+        'userAgent'        => 'SensorGrid/1.0 (personal website monitor)',
         'requestTimeout'   => 20,
         'connectTimeout'   => 10,
         'maxRedirects'     => 5,
