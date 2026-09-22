@@ -469,7 +469,7 @@ function sg_history_block(array $lines, int $total, string $class, string $prefi
                             <td data-label="Monitor" class="cell-main">
                                 <span class="site-name"><?= sg_e($p['name']) ?></span>
                                 <a class="site-url" href="<?= sg_e($p['url']) ?>" target="_blank" rel="noopener noreferrer"><?= sg_e($p['url']) ?></a>
-                                <?php if ($p['elementId'] !== ''): ?><span class="badge">#<?= sg_e($p['elementId']) ?></span><?php else: ?><span class="badge badge--dim">whole page</span><?php endif; ?>
+                                <?php if ($p['elementId'] !== ''): ?><span class="badge"><?= sg_e(sg_element_display($p['elementId'])) ?></span><?php else: ?><span class="badge badge--dim">whole page</span><?php endif; ?>
                                 <?php if ($p['active'] && $p['lastStatus'] === 'error'): ?>
                                     <p class="site-error"><?= sg_e($p['lastError']) ?> · <?= (int)$p['consecutiveFailures'] ?> failed in a row</p>
                                 <?php endif; ?>
@@ -534,8 +534,8 @@ function sg_history_block(array $lines, int $total, string $class, string $prefi
                         <input type="url" id="f-url" name="url" required placeholder="https://example.com/pricing" value="<?= sg_e($form['values']['url'] ?? '') ?>">
                     </div>
                     <div class="field">
-                        <label for="f-element">Element id <span class="dim">(optional)</span></label>
-                        <input type="text" id="f-element" name="elementId" maxlength="101" pattern="#?[A-Za-z0-9_:.\-]{0,100}" placeholder="pricing-table" title="Letters, digits and _ - : . — leave empty to watch the whole page" value="<?= sg_e($form['values']['elementId'] ?? '') ?>">
+                        <label for="f-element">Element <span class="dim">(optional)</span></label>
+                        <input type="text" id="f-element" name="elementId" maxlength="101" pattern="[#.]?[A-Za-z0-9_:.\-]{0,100}" placeholder="#pricing or .price-box" title="#id watches that one element, .class watches every element with that class — leave empty to watch the whole page" value="<?= sg_e($form['values']['elementId'] ?? '') ?>">
                     </div>
                     <div class="field">
                         <label for="f-interval">Interval (minutes)</label>

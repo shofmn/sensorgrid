@@ -4,7 +4,7 @@ A self-hosted website change monitor: it watches a page (or one element of it) o
 
 ## Features
 
-- Monitor any http(s) URL, either the whole `<body>` or a single element by `id`, every 1–1440 minutes.
+- Monitor any http(s) URL, the whole `<body>`, a single element by `#id`, or every element with a `.class`, every 1–1440 minutes.
 - Emails the **diff** (added lines green, removed lines red), one email per changed site — never a digest.
 - Per-site change history (last 20 entries) in an expandable row.
 - Test Run button: fetch and extract without storing or sending anything.
@@ -16,14 +16,14 @@ A self-hosted website change monitor: it watches a page (or one element of it) o
 ## How change detection works
 
 1. **Fetch** the URL with cURL (TLS verification always on, redirects followed, size and time limits).
-2. **Extract** the element with the configured `id` (XPath, so it works on HTML without a DTD), or `<body>` when none is set.
+2. **Extract** the inner HTML of the element with the configured `#id` (XPath, so it works on HTML without a DTD), or `<body>` when none is set. With a `.class`, extract every element that has that class (whole class name, not a substring), in page order, including each element's own tag and attributes — so a button whose class flips from `--unpurchasable` to `--purchasable` counts as a change.
 3. **Strip** `<script>`, `<style>`, `<noscript>` and comments — they change on every load without being real content.
 4. **Normalise**: one line per tag boundary, whitespace collapsed.
 5. **Hash** the lines with SHA-256 and compare against the stored snapshot.
 6. If different: compute a line diff, append a history entry, **email** the added/removed lines, then **overwrite** the snapshot.
 7. If equal: only `lastCheckAt` is updated.
 
-The **first check only establishes a baseline** — it stores a snapshot and sends no email. Changes are reported from the second check onward. Editing a monitor's URL or element id discards its snapshot so the next check re-baselines instead of reporting a bogus change.
+The **first check only establishes a baseline** — it stores a snapshot and sends no email. Changes are reported from the second check onward. Editing a monitor's URL or element discards its snapshot so the next check re-baselines instead of reporting a bogus change.
 
 ## Requirements
 
@@ -43,7 +43,7 @@ The **first check only establishes a baseline** — it stores a snapshot and sen
    then set `AuthUserFile` in `.htaccess` to that absolute path. The example file uses the placeholder `/path/outside/webroot/.htpasswd`; Apache answers `500` until it points at a real file — failing closed beats serving the app unprotected. (No `htpasswd` binary? See `.htpasswd.example` for a PHP one-liner.)
 4. **Open the app** in a browser and log in. `data/settings.txt` is created on first load.
 5. **Fill in Settings**: notify email, mail transport and SMTP details, timezone, app URL. Use **Send test email** to verify.
-6. **Add a monitor**, use **Test run** to check the URL and element id.
+6. **Add a monitor**, use **Test run** to check the URL and element.
 7. **Install the cron job** (next section).
 8. **Confirm** the header shows `LAST CRON RUN: …s ago` in blue rather than a red `CRON OFFLINE`.
 
@@ -121,11 +121,11 @@ Everything lives under `data/` (`SG_DATA_DIR` at the top of `lib.php` moves it, 
 ## Troubleshooting
 
 - **`CRON OFFLINE`** — cron has not run for over 5 minutes. Run `php cron.php` by hand and read the output and `data/cron.log`. Check the crontab line, the PHP path, and that the cron user can write `data/`. For the HTTP variant check the token.
-- **`ELEMENT_NOT_FOUND`** — no element with that `id` exists in the fetched HTML. It may be added by JavaScript (Sensor Grid does not run scripts) or differ for bots. Use **Test run**, or leave the id empty to watch the whole body.
+- **`ELEMENT_NOT_FOUND`** — no element with that `id` (or `class`) exists in the fetched HTML. It may be added by JavaScript (Sensor Grid does not run scripts) or differ for bots. Use **Test run**, or leave the element empty to watch the whole body.
 - **TLS errors (`CURL_60`)** — PHP cannot verify the site's certificate. Point `curl.cainfo` in `php.ini` at a current CA bundle (e.g. Mozilla's `cacert.pem`). Verification is never disabled.
 - **Mail not arriving** — switch the transport to `log` and send a test email; if it appears in `data/mail.log` the detection side works and the problem is SMTP. Check `data/cron.log` for the `mail[…] FAILED (…)` reason, and that `notifyEmail` is set.
 - **Permission errors on `data/`** — the web server user and the cron user both need write access (`chmod 775`, shared group).
-- **A site reports a change on every check** — the fragment contains something that changes per load (a CSRF token, timestamp, ad slot, visitor counter). The history drawer shows exactly which lines. Pick a narrower element id.
+- **A site reports a change on every check** — the fragment contains something that changes per load (a CSRF token, timestamp, ad slot, visitor counter). The history drawer shows exactly which lines. Pick a narrower element: an `#id`, or a `.class` that covers only the part you care about (useful when the relevant elements have no ids).
 - **`HTTP_401` / `HTTP_403`** — the target refuses the request. Sensor Grid does not support logins or custom headers for monitored sites.
 
 ## Local development

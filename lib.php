@@ -514,8 +514,9 @@ function sg_validate_monitor(array $in, bool $requireName = true): array
     if (str_starts_with($el, '#')) {
         $el = substr($el, 1);
     }
-    if (!preg_match('/^[A-Za-z0-9_\-:.]{0,100}$/', $el)) {
-        $errors[] = 'Element id may only contain letters, digits and _ - : . (max 100).';
+    // A leading "." selects by class (kept in the stored value); anything else is an id.
+    if (!preg_match('/^(?:\.[A-Za-z0-9_\-]{1,100}|(?!\.)[A-Za-z0-9_\-:.]{0,100})$/', $el)) {
+        $errors[] = 'Element must be an id (#price: letters, digits and _ - : .) or a class (.price: letters, digits and _ -), max 100 characters.';
     }
     $interval = filter_var($in['intervalMinutes'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 1440]]);
     if ($interval === false) {
@@ -662,6 +663,8 @@ function sg_xpath_literal(string $value): string
 
 /**
  * Extract the inner HTML of #elementId (or <body>) after stripping noise.
+ * A leading "." selects by class instead: the outer HTML of every match, in document order,
+ * so a change to a matched element's own attributes counts too.
  *
  * @return array{ok:bool,html:string,error:string}
  */
@@ -684,6 +687,20 @@ function sg_extract(string $html, string $elementId): array
     // iterator_to_array: the NodeList is live, removing while iterating would skip nodes.
     foreach (iterator_to_array($xp->query('//script | //style | //noscript | //comment()')) as $n) {
         $n->parentNode?->removeChild($n);
+    }
+
+    if (str_starts_with($elementId, '.')) {
+        // Whole-token match: padding with spaces stops ".foo" from matching "foo--bar" or "foobar".
+        $cls   = sg_xpath_literal(' ' . substr($elementId, 1) . ' ');
+        $nodes = $xp->query("//*[contains(concat(' ', normalize-space(@class), ' '), $cls)]");
+        if ($nodes === false || $nodes->length === 0) {
+            return ['ok' => false, 'html' => '', 'error' => 'ELEMENT_NOT_FOUND'];
+        }
+        $outer = '';
+        foreach ($nodes as $node) {
+            $outer .= $doc->saveHTML($node) . "\n";
+        }
+        return ['ok' => true, 'html' => $outer, 'error' => ''];
     }
 
     if ($elementId !== '') {
@@ -1152,10 +1169,16 @@ function sg_mail_log(string $to, string $subject, string $html, string $text, ar
     return ['ok' => $ok, 'error' => $ok ? '' : 'Cannot write data/mail.log'];
 }
 
+/** Selector form of a stored element: ".class" as-is, a bare id as "#id". */
+function sg_element_display(string $el): string
+{
+    return str_starts_with($el, '.') ? $el : '#' . $el;
+}
+
 /** Human label for the monitored element. */
 function sg_element_label(array $site): string
 {
-    return $site['elementId'] !== '' ? '#' . $site['elementId'] : 'entire <body>';
+    return $site['elementId'] !== '' ? sg_element_display($site['elementId']) : 'entire <body>';
 }
 
 /**
