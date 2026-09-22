@@ -1,0 +1,35 @@
+# Sensor Grid — access control is Apache Basic Auth; there is no login screen.
+# 1) Create the password file (see .htpasswd.example), ideally outside the web root.
+# 2) Set AuthUserFile below to its ABSOLUTE path. Until you do, Apache answers 500 —
+#    deliberately: failing closed beats serving the app unprotected.
+# Basic Auth sends the password in clear text; serve this over HTTPS in production.
+AuthType Basic
+AuthName "Sensor Grid"
+AuthUserFile /path/outside/webroot/.htpasswd
+Require valid-user
+
+# cron.php authenticates with its own token so system cron can call it over HTTP.
+<Files "cron.php">
+    Require all granted
+</Files>
+
+# Local test target (see README). Loopback only, so the monitor can fetch it with no credentials.
+# Delete dev-fixture.php on a production host.
+<Files "dev-fixture.php">
+    Require local
+</Files>
+
+<FilesMatch "^\.(ht|git)">
+    Require all denied
+</FilesMatch>
+
+RedirectMatch 404 /\.git
+
+Options -Indexes
+ServerSignature Off
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+    Header set Referrer-Policy "no-referrer"
+</IfModule>

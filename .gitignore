@@ -1,0 +1,8 @@
+# Runtime state: settings (SMTP password, cron token), snapshots, history, logs.
+data/*
+!data/.htaccess
+!data/.gitkeep
+
+# Real credentials; only .htpasswd.example is committed.
+.htpasswd
+.htaccess
