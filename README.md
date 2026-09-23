@@ -2,6 +2,8 @@
 
 A self-hosted website change monitor: Watch pages (or one element of it) for changes and get notified. Runs without user management and uses htaccess instead. No database required. Since this is a small personal tool, and I'm a big Star Trek fan, the UI is TNG LCARS themed.
 
+<img width="2586" height="1372" alt="sensorgrid_screenshot" src="https://github.com/user-attachments/assets/9827647c-cfd5-44b2-a9f1-8e4cce926d30" />
+
 ## Features
 
 - Monitor any http(s) URL, the whole `<body>`, a single element by `#id`, or every element with a `.class`, in intervals from 1 minute to 24 hours.
