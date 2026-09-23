@@ -422,6 +422,7 @@ function sg_page_template(): array
         'name'                => '',
         'url'                 => '',
         'elementId'           => '',
+        'tagOnly'             => false,
         'intervalMinutes'     => 60,
         'createdAt'           => '',
         'active'              => true,
@@ -457,7 +458,7 @@ function sg_page_normalize(array $page): array
 }
 
 /** Build a new monitor from validated values (see sg_validate_monitor). */
-function sg_page_new(string $name, string $url, string $elementId, int $interval): array
+function sg_page_new(string $name, string $url, string $elementId, bool $tagOnly, int $interval): array
 {
     $id = sg_guid();
     return sg_page_normalize([
@@ -465,6 +466,7 @@ function sg_page_new(string $name, string $url, string $elementId, int $interval
         'name'            => $name,
         'url'             => $url,
         'elementId'       => $elementId,
+        'tagOnly'         => $tagOnly,
         'intervalMinutes' => $interval,
         'createdAt'       => sg_now(),
     ]);
@@ -521,7 +523,7 @@ function sg_pages_apply_results(array $sitesById): void
  * Validate monitor form input.
  *
  * @param array<string,mixed> $in
- * @return array{errors:string[],values:array{name:string,url:string,elementId:string,intervalMinutes:int}}
+ * @return array{errors:string[],values:array{name:string,url:string,elementId:string,tagOnly:bool,intervalMinutes:int}}
  */
 function sg_validate_monitor(array $in, bool $requireName = true): array
 {
@@ -549,7 +551,11 @@ function sg_validate_monitor(array $in, bool $requireName = true): array
     }
     return [
         'errors' => $errors,
-        'values' => ['name' => $name, 'url' => $url, 'elementId' => $el, 'intervalMinutes' => $interval],
+        'values' => [
+            'name' => $name, 'url' => $url, 'elementId' => $el,
+            'tagOnly' => $el !== '' && !empty($in['tagOnly']), // meaningless for the whole page
+            'intervalMinutes' => $interval,
+        ],
     ];
 }
 
@@ -689,10 +695,12 @@ function sg_xpath_literal(string $value): string
  * Extract the inner HTML of #elementId (or <body>) after stripping noise.
  * A leading "." selects by class instead: the outer HTML of every match, in document order,
  * so a change to a matched element's own attributes counts too.
+ * With $tagOnly, each match yields only its own tag (with attributes) and direct text;
+ * nested elements are ignored.
  *
  * @return array{ok:bool,html:string,error:string}
  */
-function sg_extract(string $html, string $elementId): array
+function sg_extract(string $html, string $elementId, bool $tagOnly = false): array
 {
     if (trim($html) === '') {
         return ['ok' => false, 'html' => '', 'error' => 'EMPTY_RESPONSE'];
@@ -713,40 +721,49 @@ function sg_extract(string $html, string $elementId): array
         $n->parentNode?->removeChild($n);
     }
 
-    if (str_starts_with($elementId, '.')) {
-        // Whole-token match: padding with spaces stops ".foo" from matching "foo--bar" or "foobar".
-        $cls   = sg_xpath_literal(' ' . substr($elementId, 1) . ' ');
-        $nodes = $xp->query("//*[contains(concat(' ', normalize-space(@class), ' '), $cls)]");
-        if ($nodes === false || $nodes->length === 0) {
-            return ['ok' => false, 'html' => '', 'error' => 'ELEMENT_NOT_FOUND'];
-        }
-        $outer = '';
-        foreach ($nodes as $node) {
-            $outer .= $doc->saveHTML($node) . "\n";
-        }
-        return ['ok' => true, 'html' => $outer, 'error' => ''];
+    if ($elementId === '') {
+        $body = $xp->query('//body')->item(0) ?? $doc->documentElement;
+        return $body === null
+            ? ['ok' => false, 'html' => '', 'error' => 'EMPTY_RESPONSE']
+            : ['ok' => true, 'html' => sg_inner_html($body), 'error' => ''];
     }
 
-    if ($elementId !== '') {
-        // XPath instead of getElementById(), which returns null for HTML without a DTD.
-        $nodes = $xp->query('//*[@id=' . sg_xpath_literal($elementId) . ']');
-        if ($nodes === false || $nodes->length === 0) {
-            return ['ok' => false, 'html' => '', 'error' => 'ELEMENT_NOT_FOUND'];
+    $isClass = str_starts_with($elementId, '.');
+    // Whole-token class match: padding with spaces stops ".foo" from matching "foo--bar" or "foobar".
+    // Ids use XPath instead of getElementById(), which returns null for HTML without a DTD.
+    $nodes = $isClass
+        ? $xp->query("//*[contains(concat(' ', normalize-space(@class), ' '), " . sg_xpath_literal(' ' . substr($elementId, 1) . ' ') . ')]')
+        : $xp->query('//*[@id=' . sg_xpath_literal($elementId) . ']');
+    if ($nodes === false || $nodes->length === 0) {
+        return ['ok' => false, 'html' => '', 'error' => 'ELEMENT_NOT_FOUND'];
+    }
+
+    $out = '';
+    foreach ($isClass ? $nodes : [$nodes->item(0)] as $node) {
+        if ($tagOnly) {
+            // Shallow copy: the tag and its attributes, plus only the text written directly inside it.
+            $own = $node->cloneNode(false);
+            foreach ($node->childNodes as $child) {
+                if ($child instanceof DOMText) {
+                    $own->appendChild($child->cloneNode());
+                }
+            }
+            $out .= $doc->saveHTML($own) . "\n";
+        } else {
+            $out .= $isClass ? $doc->saveHTML($node) . "\n" : sg_inner_html($node);
         }
-        $target = $nodes->item(0);
-    } else {
-        $target = $xp->query('//body')->item(0) ?? $doc->documentElement;
     }
-    if ($target === null) {
-        return ['ok' => false, 'html' => '', 'error' => 'EMPTY_RESPONSE'];
-    }
+    return ['ok' => true, 'html' => $out, 'error' => ''];
+}
 
-    $inner = '';
-    foreach ($target->childNodes as $child) {
-        $inner .= $doc->saveHTML($child);
+/** Concatenated HTML of a node's children. */
+function sg_inner_html(DOMNode $node): string
+{
+    $html = '';
+    foreach ($node->childNodes as $child) {
+        $html .= $node->ownerDocument->saveHTML($child);
     }
-
-    return ['ok' => true, 'html' => $inner, 'error' => ''];
+    return $html;
 }
 
 /**
@@ -911,7 +928,7 @@ function sg_check_site(array $site, array $settings, bool $dryRun = false): arra
     $error = $fetch['error'];
     $ex    = ['ok' => false, 'html' => ''];
     if ($fetch['ok']) {
-        $ex    = sg_extract($fetch['body'], (string)$site['elementId']);
+        $ex    = sg_extract($fetch['body'], (string)$site['elementId'], !empty($site['tagOnly']));
         $error = $ex['error'];
     }
     if ($error !== '') {
@@ -1204,7 +1221,10 @@ function sg_element_display(string $el): string
 /** Human label for the monitored element. */
 function sg_element_label(array $site): string
 {
-    return $site['elementId'] !== '' ? sg_element_display($site['elementId']) : 'entire <body>';
+    if ($site['elementId'] === '') {
+        return 'entire <body>';
+    }
+    return sg_element_display($site['elementId']) . (!empty($site['tagOnly']) ? ' (element only)' : '');
 }
 
 /**

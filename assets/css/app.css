@@ -323,7 +323,8 @@ td .dim { display: block; font-size: .9rem; }
   color: var(--lcars-almond);
 }
 .field--check { justify-content: flex-end; }
-.field--check label { display: flex; align-items: center; gap: 8px; }
+.field--check label, .check-inline { display: flex; align-items: center; gap: 8px; }
+.check-inline { margin-top: 4px; }
 input[type="checkbox"] { width: 1.15rem; height: 1.15rem; accent-color: var(--lcars-orange); }
 
 input[type="text"], input[type="url"], input[type="email"], input[type="number"], input[type="password"], select {

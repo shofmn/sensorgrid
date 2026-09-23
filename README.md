@@ -18,7 +18,7 @@ A self-hosted website change monitor: Watch pages (or one element of it) for cha
 ## How change detection works
 
 1. **Fetch** the URL with cURL (TLS verification always on, redirects followed, size and time limits).
-2. **Extract** the inner HTML of the element with the configured `#id`, or `<body>` when none is set. With a `.class`, extract every element that has that class, including each element's own tag and attributes — so for example, a button whose class flips from `.button--unpurchasable` to `.button--purchasable` counts as a change.
+2. **Extract** the inner HTML of the element with the configured `#id`, or `<body>` when none is set. With a `.class`, extract every element that has that class, including each element's own tag and attributes — so for example, a button whose class flips from `.button--unpurchasable` to `.button--purchasable` counts as a change. With **Element only** ticked, each matched element contributes just its own tag (with attributes) and the text written directly inside it; nested elements are ignored.
 3. **Strip** `<script>`, `<style>`, `<noscript>` and comments.
 4. **Normalise**: one line per tag boundary, whitespace collapsed.
 5. **Hash** the lines with SHA-256 and compare against the stored snapshot.
@@ -143,7 +143,7 @@ Everything lives under `data/` (`SG_DATA_DIR` at the top of `lib.php` moves it, 
 - **TLS errors (**`CURL_60`**)** — PHP cannot verify the site's certificate. Point `curl.cainfo` in `php.ini` at a current CA bundle (e.g. Mozilla's `cacert.pem`). Verification is never disabled.
 - **Mail not arriving** — switch the transport to `log` and send a test email; if it appears in `data/mail.log` the detection side works and the problem is SMTP. Check `data/cron.log` for the `mail[…] FAILED (…)` reason, and that `notifyEmail` is set.
 - **Permission errors on** `data/` — the web server user and the cron user both need write access (`chmod 775`, shared group).
-- **A site reports a change on every check** — the fragment contains something that changes per load (a CSRF token, timestamp, ad slot, visitor counter). The history drawer shows exactly which lines. Pick a narrower element: an `#id`, or a `.class` that covers only the part you care about (useful when the relevant elements have no ids).
+- **A site reports a change on every check** — the fragment contains something that changes per load (a CSRF token, timestamp, ad slot, visitor counter). The history drawer shows exactly which lines. Pick a narrower element: an `#id`, or a `.class` that covers only the part you care about (useful when the relevant elements have no ids). If the noise sits in tags nested inside that element, tick **Element only (ignore nested tags)**.
 - `HTTP_401` **/** `HTTP_403` — the target refuses the request. Sensor Grid does not support logins or custom headers for monitored sites.
 
 

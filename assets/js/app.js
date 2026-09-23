@@ -75,11 +75,11 @@
   const form       = $('#monitor-form');
   const testResult = $('#test-result');
 
-  async function runTest(url, elementId, label) {
+  async function runTest(url, elementId, tagOnly, label) {
     showResult(testResult, { ok: true, title: `Testing ${label}…` });
     testResult.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     try {
-      const r = await post({ action: 'test', url, elementId });
+      const r = await post({ action: 'test', url, elementId, tagOnly: tagOnly ? '1' : '' });
       const rows = [
         ['HTTP code', r.httpCode || '—'],
         ['Final URL', r.finalUrl || '—'],
@@ -100,11 +100,13 @@
 
   $('#f-test').addEventListener('click', () => {
     if (!form.elements.url.reportValidity()) return;
-    runTest(form.elements.url.value, form.elements.elementId.value, form.elements.name.value || form.elements.url.value);
+    runTest(form.elements.url.value, form.elements.elementId.value, form.elements.tagOnly.checked,
+      form.elements.name.value || form.elements.url.value);
   });
 
   $$('[data-test]').forEach((btn) =>
-    btn.addEventListener('click', () => runTest(btn.dataset.url, btn.dataset.element, btn.dataset.name)));
+    btn.addEventListener('click', () =>
+      runTest(btn.dataset.url, btn.dataset.element, btn.dataset.tagOnly === '1', btn.dataset.name)));
 
   /* ---------- Send test email ---------- */
 
@@ -180,6 +182,7 @@
       form.elements.name.value = d.name;
       form.elements.url.value = d.url;
       form.elements.elementId.value = d.element;
+      form.elements.tagOnly.checked = d.tagOnly === '1';
       form.elements.intervalMinutes.value = d.interval;
       setFormMode(true);
       testResult.hidden = true;

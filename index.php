@@ -70,7 +70,7 @@ function sg_action_add(array $post): void
         return;
     }
     $x    = $v['values'];
-    $page = sg_page_new($x['name'], $x['url'], $x['elementId'], $x['intervalMinutes']);
+    $page = sg_page_new($x['name'], $x['url'], $x['elementId'], $x['tagOnly'], $x['intervalMinutes']);
     sg_pages_update(static fn(array $pages): array => [...$pages, $page]);
     sg_flash('ok', 'Monitor "' . $x['name'] . '" added. Its first check will store a baseline (no email).');
 }
@@ -92,7 +92,7 @@ function sg_action_update(array $post): void
             if ($p['id'] !== $id) {
                 continue;
             }
-            $retarget = $p['url'] !== $x['url'] || $p['elementId'] !== $x['elementId'];
+            $retarget = $p['url'] !== $x['url'] || $p['elementId'] !== $x['elementId'] || (bool)$p['tagOnly'] !== $x['tagOnly'];
             $p = array_merge($p, $x);
             if ($retarget) {
                 $p = array_merge($p, [
@@ -501,7 +501,7 @@ function sg_history_block(array $lines, int $total, string $class, string $prefi
                             <td data-label="Monitor" class="cell-main">
                                 <span class="site-name"><?= sg_e($p['name']) ?></span>
                                 <a class="site-url" href="<?= sg_e($p['url']) ?>" target="_blank" rel="noopener noreferrer"><?= sg_e($p['url']) ?></a>
-                                <?php if ($p['elementId'] !== ''): ?><span class="badge"><?= sg_e(sg_element_display($p['elementId'])) ?></span><?php else: ?><span class="badge badge--dim">whole page</span><?php endif; ?>
+                                <?php if ($p['elementId'] !== ''): ?><span class="badge"><?= sg_e(sg_element_display($p['elementId'])) ?></span><?php if ($p['tagOnly']): ?> <span class="badge badge--dim">element only</span><?php endif; ?><?php else: ?><span class="badge badge--dim">whole page</span><?php endif; ?>
                                 <?php if ($p['active'] && $p['lastStatus'] === 'error'): ?>
                                     <p class="site-error"><?= sg_e($p['lastError']) ?> · <?= (int)$p['consecutiveFailures'] ?> failed in a row</p>
                                 <?php endif; ?>
@@ -521,8 +521,8 @@ function sg_history_block(array $lines, int $total, string $class, string $prefi
                                     <input type="hidden" name="csrf" value="<?= sg_e($csrf) ?>">
                                     <input type="hidden" name="id" value="<?= sg_e($p['id']) ?>">
                                     <button type="submit" name="action" value="check" class="lcars-btn lcars-btn--sm lcars-btn--orange">Check</button>
-                                    <button type="button" class="lcars-btn lcars-btn--sm lcars-btn--blue" data-test data-name="<?= sg_e($p['name']) ?>" data-url="<?= sg_e($p['url']) ?>" data-element="<?= sg_e($p['elementId']) ?>">Test</button>
-                                    <button type="button" class="lcars-btn lcars-btn--sm lcars-btn--lilac" data-edit data-id="<?= sg_e($p['id']) ?>" data-name="<?= sg_e($p['name']) ?>" data-url="<?= sg_e($p['url']) ?>" data-element="<?= sg_e($p['elementId']) ?>" data-interval="<?= (int)$p['intervalMinutes'] ?>">Edit</button>
+                                    <button type="button" class="lcars-btn lcars-btn--sm lcars-btn--blue" data-test data-name="<?= sg_e($p['name']) ?>" data-url="<?= sg_e($p['url']) ?>" data-element="<?= sg_e($p['elementId']) ?>" data-tag-only="<?= $p['tagOnly'] ? '1' : '' ?>">Test</button>
+                                    <button type="button" class="lcars-btn lcars-btn--sm lcars-btn--lilac" data-edit data-id="<?= sg_e($p['id']) ?>" data-name="<?= sg_e($p['name']) ?>" data-url="<?= sg_e($p['url']) ?>" data-element="<?= sg_e($p['elementId']) ?>" data-tag-only="<?= $p['tagOnly'] ? '1' : '' ?>" data-interval="<?= (int)$p['intervalMinutes'] ?>">Edit</button>
                                     <button type="submit" name="action" value="toggle" class="lcars-btn lcars-btn--sm lcars-btn--grey"><?= $p['active'] ? 'Pause' : 'Resume' ?></button>
                                     <button type="button" class="lcars-btn lcars-btn--sm lcars-btn--almond" data-history="<?= sg_e($p['id']) ?>" aria-expanded="false" aria-controls="history-<?= sg_e($p['id']) ?>">History (<?= count($hist) ?>)</button>
                                     <button type="submit" name="action" value="delete" class="lcars-btn lcars-btn--sm lcars-btn--red" data-confirm="Delete “<?= sg_e($p['name']) ?>” and its history?">Delete</button>
@@ -568,6 +568,7 @@ function sg_history_block(array $lines, int $total, string $class, string $prefi
                     <div class="field">
                         <label for="f-element">Element <span class="dim">(optional)</span></label>
                         <input type="text" id="f-element" name="elementId" maxlength="101" pattern="[#.]?[A-Za-z0-9_:.\-]{0,100}" placeholder="#pricing or .price-box" title="#id watches that one element, .class watches every element with that class — leave empty to watch the whole page" value="<?= sg_e($form['values']['elementId'] ?? '') ?>">
+                        <label class="check-inline" title="Track only the matched tag's attributes and its own text; anything nested inside it is ignored"><input type="checkbox" name="tagOnly" value="1"<?= !empty($form['values']['tagOnly']) ? ' checked' : '' ?>> Element only (ignore nested tags)</label>
                     </div>
                     <div class="field">
                         <label for="f-interval">Interval (minutes)</label>
