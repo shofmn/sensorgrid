@@ -1011,7 +1011,8 @@ function sg_check_site_guarded(array $site, array $settings): array
 }
 
 /**
- * Bookkeeping for a failed check; sends the one-time failure email when the threshold is crossed.
+ * Bookkeeping for a failed check; sends the one-time failure email when the threshold is crossed
+ * (immediately for a missing element).
  *
  * @return array<string,mixed> updated site
  */
@@ -1021,9 +1022,11 @@ function sg_record_failure(array $site, array $settings, string $error): array
     $site['lastError']           = $error;
     $site['consecutiveFailures'] = (int)$site['consecutiveFailures'] + 1;
 
+    // The threshold absorbs transient fetch errors. A missing element means the page loaded
+    // fine and the element is gone, so there is nothing to wait out.
     if (
         !empty($settings['notifyOnFailure'])
-        && $site['consecutiveFailures'] >= (int)$settings['failureThreshold']
+        && ($site['consecutiveFailures'] >= (int)$settings['failureThreshold'] || $error === 'ELEMENT_NOT_FOUND')
         && empty($site['failureNotified'])
     ) {
         sg_send_failure_email($site, $settings, $error);

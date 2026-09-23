@@ -664,7 +664,7 @@ function sg_history_block(array $lines, int $total, string $class, string $prefi
                             <div class="field field--wide"><label for="s-ua">User agent</label><input type="text" id="s-ua" name="userAgent" maxlength="200" value="<?= sg_e($settings['userAgent']) ?>"></div>
                             <div class="field"><label for="s-rt">Request timeout (s)</label><input type="number" id="s-rt" name="requestTimeout" min="1" max="120" value="<?= (int)$settings['requestTimeout'] ?>"></div>
                             <div class="field"><label for="s-ct">Connect timeout (s)</label><input type="number" id="s-ct" name="connectTimeout" min="1" max="60" value="<?= (int)$settings['connectTimeout'] ?>"></div>
-                            <div class="field"><label for="s-ft">Failure threshold</label><input type="number" id="s-ft" name="failureThreshold" min="1" max="100" value="<?= (int)$settings['failureThreshold'] ?>"></div>
+                            <div class="field"><label for="s-ft">Failure threshold</label><input type="number" id="s-ft" name="failureThreshold" title="Consecutive failed checks before alerting. A missing element alerts immediately." min="1" max="100" value="<?= (int)$settings['failureThreshold'] ?>"></div>
                             <div class="field field--check"><label><input type="checkbox" name="notifyOnFailure" value="1"<?= $settings['notifyOnFailure'] ? ' checked' : '' ?>> Notify when a monitor keeps failing</label></div>
                         </div>
 

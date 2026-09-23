@@ -101,7 +101,7 @@ All keys of `data/settings.txt` (JSON). Everything except the read-only ones is 
 | `maxRedirects`     | `5`                      | Redirects followed per fetch (file only).                                                      |
 | `maxContentBytes`  | `2000000`                | Larger responses fail with `CONTENT_TOO_LARGE` (file only).                                    |
 | `notifyOnFailure`  | `true`                   | Send a failure email (and Telegram message) when the threshold is crossed.                     |
-| `failureThreshold` | `3`                      | Consecutive failures before that email.                                                        |
+| `failureThreshold` | `3`                      | Consecutive failures before that email (a missing element alerts on the first check).          |
 | `lastCronRun`      | `null`                   | Written by `cron.php`; drives the CRON OFFLINE warning.                                        |
 | `lastCronDuration` | `null`                   | Seconds the last cron run took.                                                                |
 
@@ -139,7 +139,7 @@ Everything lives under `data/` (`SG_DATA_DIR` at the top of `lib.php` moves it, 
 ## Troubleshooting
 
 - `CRON OFFLINE` — cron has not run for over 5 minutes. Run `php cron.php` by hand and read the output and `data/cron.log`. Check the crontab line, the PHP path, and that the cron user can write `data/`. For the HTTP variant check the token.
-- `ELEMENT_NOT_FOUND` — no element with that `id` (or `class`) exists in the fetched HTML. It may be added by JavaScript (Sensor Grid does not run scripts) or differ for bots. Use **Test run**, or leave the element empty to watch the whole body.
+- `ELEMENT_NOT_FOUND` — no element with that `id` (or `class`) exists in the fetched HTML. It may be added by JavaScript (Sensor Grid does not run scripts) or differ for bots. Use **Test run**, or leave the element empty to watch the whole body. An element that disappears triggers one alert right away (no failure threshold), and another only after it has reappeared and vanished again.
 - **TLS errors (**`CURL_60`**)** — PHP cannot verify the site's certificate. Point `curl.cainfo` in `php.ini` at a current CA bundle (e.g. Mozilla's `cacert.pem`). Verification is never disabled.
 - **Mail not arriving** — switch the transport to `log` and send a test email; if it appears in `data/mail.log` the detection side works and the problem is SMTP. Check `data/cron.log` for the `mail[…] FAILED (…)` reason, and that `notifyEmail` is set.
 - **Permission errors on** `data/` — the web server user and the cron user both need write access (`chmod 775`, shared group).
